@@ -1,0 +1,698 @@
+```html
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+    <title>ライツアウト Pro</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            text-align: center;
+            background-color: #1e1e24;
+            color: #fff;
+            margin: 0;
+            padding: 16px 10px 30px;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        h1 {
+            margin: 5px 0 15px;
+            color: #00ffcc;
+            font-size: 28px;
+        }
+
+        .controls {
+            margin-bottom: 15px;
+            font-size: 15px;
+        }
+
+        select,
+        button {
+            padding: 11px 14px;
+            font-size: 16px;
+            margin: 4px;
+            border-radius: 7px;
+            border: none;
+            cursor: pointer;
+            vertical-align: middle;
+            -webkit-appearance: none;
+        }
+
+        select {
+            background-color: #333;
+            color: #fff;
+        }
+
+        button {
+            background-color: #00ffcc;
+            color: #1e1e24;
+            font-weight: bold;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        label {
+            margin-right: 5px;
+            user-select: none;
+        }
+
+        input[type="checkbox"] {
+            transform: scale(1.3);
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .info {
+            font-size: 17px;
+            margin-bottom: 12px;
+        }
+
+        .current-size {
+            font-weight: bold;
+            color: #00ffcc;
+        }
+
+        /*
+         * ゲーム盤
+         */
+        #grid {
+            display: grid;
+            margin: 0 auto;
+            background-color: #333;
+            padding: 7px;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+
+            /* スマホのタッチ操作に最適化 */
+            touch-action: manipulation;
+        }
+
+        /*
+         * マス
+         */
+        .cell {
+            background-color: #444;
+            border: 2px solid #1e1e24;
+            border-radius: 5px;
+
+            cursor: pointer;
+
+            transition:
+                background-color 0.12s,
+                box-shadow 0.12s;
+
+            /*
+             * タップ時の選択・長押しメニューなどを抑制
+             */
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: manipulation;
+        }
+
+        /*
+         * ON状態
+         */
+        .cell.on {
+            background-color: #fff200;
+            box-shadow:
+                inset 0 0 15px #ffea00,
+                0 0 10px #fff200;
+        }
+
+        /*
+         * タップした瞬間の視覚効果
+         */
+        .cell:active {
+            transform: scale(0.94);
+        }
+
+        /*
+         * クリアメッセージ
+         */
+        .win-message {
+            display: none;
+            font-size: 22px;
+            color: #00ffcc;
+            font-weight: bold;
+            margin-top: 20px;
+            animation: blink 1s infinite alternate;
+        }
+
+        .guide {
+            margin-top: 15px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        @keyframes blink {
+            from {
+                opacity: 0.5;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /*
+         * スマホ用調整
+         */
+        @media (max-width: 480px) {
+
+            body {
+                padding-top: 10px;
+            }
+
+            h1 {
+                font-size: 25px;
+                margin-bottom: 12px;
+            }
+
+            .controls {
+                font-size: 14px;
+            }
+
+            select,
+            button {
+                font-size: 15px;
+                padding: 10px 12px;
+            }
+
+            .info {
+                font-size: 16px;
+            }
+
+            .guide {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>ライツアウト</h1>
+
+    <div class="controls">
+
+        <label for="sizeSelect">
+            サイズ：
+        </label>
+
+        <select id="sizeSelect">
+            <!-- JavaScriptで2〜10を生成 -->
+        </select>
+
+        <label>
+            <input type="checkbox" id="randomSizeCheck">
+            サイズもランダム
+        </label>
+
+        <button onclick="initGame()">
+            ランダム生成
+        </button>
+
+    </div>
+
+    <div class="info">
+
+        現在のサイズ：
+        <span id="sizeDisplay" class="current-size">-</span>
+
+        &nbsp;｜&nbsp;
+
+        手数：
+        <span id="moveCount">0</span>
+
+    </div>
+
+    <!-- ゲーム盤 -->
+    <div id="grid"></div>
+
+    <!-- クリアメッセージ -->
+    <div id="winMessage" class="win-message">
+        🎉 おめでとうございます！クリアです！
+    </div>
+
+    <div class="guide">
+        💡 <b>操作方法：</b>
+        マスをタップして反転
+    </div>
+
+
+    <script>
+
+        /*
+         * ============================
+         * ゲーム変数
+         * ============================
+         */
+
+        let size = 5;
+        let gridState = [];
+        let moves = 0;
+        let isWon = false;
+
+
+        /*
+         * ============================
+         * サイズ選択を作成
+         * ============================
+         */
+
+        const select = document.getElementById('sizeSelect');
+
+        for (let i = 2; i <= 10; i++) {
+
+            const option = document.createElement('option');
+
+            option.value = i;
+            option.textContent = `${i} × ${i}`;
+
+            if (i === 5) {
+                option.selected = true;
+            }
+
+            select.appendChild(option);
+        }
+
+
+        /*
+         * ============================
+         * ランダムサイズ
+         * ============================
+         */
+
+        const randomCheck =
+            document.getElementById('randomSizeCheck');
+
+        randomCheck.addEventListener('change', () => {
+
+            select.disabled = randomCheck.checked;
+
+        });
+
+
+        /*
+         * ============================
+         * ゲーム開始
+         * ============================
+         */
+
+        function initGame() {
+
+            /*
+             * サイズ決定
+             */
+
+            if (randomCheck.checked) {
+
+                size =
+                    Math.floor(Math.random() * 9) + 2;
+
+                select.value = size;
+
+            } else {
+
+                size =
+                    parseInt(select.value);
+
+            }
+
+
+            /*
+             * 初期化
+             */
+
+            moves = 0;
+            isWon = false;
+
+            document.getElementById('sizeDisplay').textContent =
+                `${size} × ${size}`;
+
+            document.getElementById('moveCount').textContent =
+                moves;
+
+            document.getElementById('winMessage').style.display =
+                'none';
+
+
+            /*
+             * 全マスOFFで作成
+             */
+
+            gridState =
+                Array(size)
+                    .fill()
+                    .map(() =>
+                        Array(size).fill(false)
+                    );
+
+
+            /*
+             * 盤面を作成
+             */
+
+            const grid =
+                document.getElementById('grid');
+
+            grid.innerHTML = '';
+
+
+            /*
+             * スマホ画面に合わせてサイズ調整
+             */
+
+            const maxSize = 500;
+
+            const screenWidth =
+                window.innerWidth;
+
+            const containerSize =
+                Math.min(
+                    maxSize,
+                    screenWidth - 24
+                );
+
+
+            grid.style.width =
+                `${containerSize}px`;
+
+            grid.style.height =
+                `${containerSize}px`;
+
+            grid.style.gridTemplateColumns =
+                `repeat(${size}, 1fr)`;
+
+            grid.style.gridTemplateRows =
+                `repeat(${size}, 1fr)`;
+
+
+            /*
+             * マスを作成
+             */
+
+            for (let r = 0; r < size; r++) {
+
+                for (let c = 0; c < size; c++) {
+
+                    const cell =
+                        document.createElement('div');
+
+                    cell.classList.add('cell');
+
+                    cell.id =
+                        `cell-${r}-${c}`;
+
+
+                    /*
+                     * スマホでは
+                     * 「タップしたマス」を
+                     * そのまま操作する
+                     */
+
+                    cell.addEventListener('click', () => {
+
+                        if (isWon) {
+                            return;
+                        }
+
+                        handleCellAction(r, c);
+
+                    });
+
+
+                    grid.appendChild(cell);
+
+                }
+
+            }
+
+
+            /*
+             * ランダムに盤面をシャッフル
+             *
+             * 実際の操作と同じ
+             * toggleLights() を使用するので、
+             * 必ず解ける盤面になる
+             */
+
+            const shuffleSteps =
+                size * size * 2;
+
+
+            for (let i = 0; i < shuffleSteps; i++) {
+
+                const randR =
+                    Math.floor(Math.random() * size);
+
+                const randC =
+                    Math.floor(Math.random() * size);
+
+                toggleLights(randR, randC);
+
+            }
+
+
+            /*
+             * 初期状態が完成状態だった場合、
+             * もう一度生成
+             */
+
+            if (checkWin()) {
+
+                initGame();
+
+            } else {
+
+                updateView();
+
+            }
+
+        }
+
+
+        /*
+         * ============================
+         * マスを反転
+         * ============================
+         *
+         * 自分
+         * 上
+         * 下
+         * 左
+         * 右
+         */
+
+        function toggleLights(r, c) {
+
+            const dirs = [
+
+                [0, 0],
+
+                [-1, 0],
+
+                [1, 0],
+
+                [0, -1],
+
+                [0, 1]
+
+            ];
+
+
+            dirs.forEach(([dr, dc]) => {
+
+                const nr = r + dr;
+                const nc = c + dc;
+
+
+                /*
+                 * 盤面の外なら無視
+                 */
+
+                if (
+                    nr >= 0 &&
+                    nr < size &&
+                    nc >= 0 &&
+                    nc < size
+                ) {
+
+                    gridState[nr][nc] =
+                        !gridState[nr][nc];
+
+                }
+
+            });
+
+        }
+
+
+        /*
+         * ============================
+         * マスをタップしたとき
+         * ============================
+         */
+
+        function handleCellAction(r, c) {
+
+            if (isWon) {
+                return;
+            }
+
+
+            /*
+             * マスを反転
+             */
+
+            toggleLights(r, c);
+
+
+            /*
+             * 手数を追加
+             */
+
+            moves++;
+
+
+            document.getElementById('moveCount').textContent =
+                moves;
+
+
+            /*
+             * 画面更新
+             */
+
+            updateView();
+
+
+            /*
+             * クリア判定
+             */
+
+            if (checkWin()) {
+
+                isWon = true;
+
+                document.getElementById('winMessage').style.display =
+                    'block';
+
+            }
+
+        }
+
+
+        /*
+         * ============================
+         * 画面更新
+         * ============================
+         */
+
+        function updateView() {
+
+            for (let r = 0; r < size; r++) {
+
+                for (let c = 0; c < size; c++) {
+
+                    const cell =
+                        document.getElementById(
+                            `cell-${r}-${c}`
+                        );
+
+
+                    if (gridState[r][c]) {
+
+                        cell.classList.add('on');
+
+                    } else {
+
+                        cell.classList.remove('on');
+
+                    }
+
+                }
+
+            }
+
+        }
+
+
+        /*
+         * ============================
+         * クリア判定
+         * ============================
+         */
+
+        function checkWin() {
+
+            for (let r = 0; r < size; r++) {
+
+                for (let c = 0; c < size; c++) {
+
+                    if (gridState[r][c]) {
+
+                        return false;
+
+                    }
+
+                }
+
+            }
+
+            return true;
+
+        }
+
+
+        /*
+         * ============================
+         * 画面サイズ変更時
+         * ============================
+         *
+         * スマホを縦・横に回転した場合など
+         */
+
+        window.addEventListener('resize', () => {
+
+            const grid =
+                document.getElementById('grid');
+
+            const containerSize =
+                Math.min(
+                    500,
+                    window.innerWidth - 24
+                );
+
+            grid.style.width =
+                `${containerSize}px`;
+
+            grid.style.height =
+                `${containerSize}px`;
+
+        });
+
+
+        /*
+         * ============================
+         * ゲーム開始
+         * ============================
+         */
+
+        initGame();
+
+    </script>
+
+</body>
+</html>
+```
